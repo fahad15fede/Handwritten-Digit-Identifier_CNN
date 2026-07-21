@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.pyc
+
+backend/model/*.keras
+
+.env
+
+.vscode/
+
+node_modules/
+
+dist/
