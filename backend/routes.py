@@ -1,17 +1,25 @@
-from fastapi import APIRouter
-from predictor import model
+from fastapi import APIRouter, UploadFile, File
+
+from preprocess import preprocess
+from predictor import predict_digits
 
 router = APIRouter()
 
 
 @router.get("/")
 def home():
-    return {"message": "API Running"}
-
-
-@router.get("/health")
-def health():
     return {
-        "status": "healthy",
-        "model_loaded": model is not None
+        "message": "Handwritten Digit Recognition API Running"
     }
+
+
+@router.post("/predict")
+async def predict(file: UploadFile = File(...)):
+
+    file_bytes = await file.read()
+
+    processed_digits = preprocess(file_bytes)
+
+    result = predict_digits(processed_digits)
+
+    return result

@@ -3,41 +3,33 @@ import numpy as np
 
 
 def read_image(file_bytes):
-    """
-    Converts uploaded image bytes into an OpenCV image.
-    """
-
     image = np.frombuffer(file_bytes, np.uint8)
-
     image = cv2.imdecode(image, cv2.IMREAD_COLOR)
-
     return image
 
+
 def to_grayscale(image):
+    return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    return gray
 
 def blur_image(gray):
+    return cv2.GaussianBlur(gray, (5, 5), 0)
 
-    return cv2.GaussianBlur(gray, (5,5), 0)
 
 def threshold_image(gray):
-
     _, thresh = cv2.threshold(
         gray,
         0,
         255,
-        cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+        cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU,
     )
-
     return thresh
 
-def extract_digit(binary_image):
+
+def extract_digits(binary_image):
     """
-    Finds the largest contour (assumed to be the digit)
-    and crops it.
+    Returns every detected digit
+    from left to right.
     """
 
     contours, _ = cv2.findContours(
@@ -46,23 +38,32 @@ def extract_digit(binary_image):
         cv2.CHAIN_APPROX_SIMPLE
     )
 
-    if len(contours) == 0:
-        raise ValueError("No digit found.")
+    digit_images = []
 
-    # Largest contour
-    largest = max(contours, key=cv2.contourArea)
+    for contour in contours:
 
-    x, y, w, h = cv2.boundingRect(largest)
+        area = cv2.contourArea(contour)
 
-    digit = binary_image[y:y+h, x:x+w]
+        # Ignore tiny noise
+        if area < 80:
+            continue
 
-    return digit
+        x, y, w, h = cv2.boundingRect(contour)
+
+        digit = binary_image[y:y+h, x:x+w]
+
+        digit_images.append((x, digit))
+
+    # Sort left → right
+    digit_images.sort(key=lambda item: item[0])
+
+    # Remove x coordinate
+    digit_images = [digit for _, digit in digit_images]
+
+    return digit_images
+
 
 def resize_keep_aspect(image, target_size=20):
-    """
-    Resize digit while keeping aspect ratio.
-    The longest side becomes target_size.
-    """
 
     h, w = image.shape
 
@@ -81,20 +82,18 @@ def resize_keep_aspect(image, target_size=20):
 
     return resized
 
+
 def pad_image(image, size=28):
-    """
-    Pad resized digit to 28x28.
-    """
 
     h, w = image.shape
 
-    top = (size - h) // 2
-    bottom = size - h - top
+    top = (size-h)//2
+    bottom = size-h-top
 
-    left = (size - w) // 2
-    right = size - w - left
+    left = (size-w)//2
+    right = size-w-left
 
-    padded = cv2.copyMakeBorder(
+    return cv2.copyMakeBorder(
         image,
         top,
         bottom,
@@ -104,16 +103,42 @@ def pad_image(image, size=28):
         value=0
     )
 
-    return padded
 
 def normalize(image):
+    return image.astype("float32") / 255.0
 
-    image = image.astype("float32") / 255.0
-
-    return image
 
 def reshape_image(image):
+    return image.reshape(1, 28, 28, 1)
 
-    image = image.reshape(1, 28, 28, 1)
 
-    return image
+def preprocess(file_bytes):
+    """
+    Returns a LIST of processed digits.
+    """
+
+    image = read_image(file_bytes)
+
+    gray = to_grayscale(image)
+
+    blur = blur_image(gray)
+
+    thresh = threshold_image(blur)
+
+    digits = extract_digits(thresh)
+
+    processed_digits = []
+
+    for digit in digits:
+
+        digit = resize_keep_aspect(digit)
+
+        digit = pad_image(digit)
+
+        digit = normalize(digit)
+
+        digit = reshape_image(digit)
+
+        processed_digits.append(digit)
+
+    return processed_digits
