@@ -2,7 +2,6 @@ venv/
 __pycache__/
 *.pyc
 
-backend/model/*.keras
 
 .env
 
